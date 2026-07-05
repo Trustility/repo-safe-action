@@ -1,0 +1,126 @@
+{
+  "description": "Shared RFC 8785 (JCS) + normalizeFloats(6) + SHA-256 event-hash vectors. The proof rail (computeEventHash) and the repo-safe-action SDK MUST both reproduce expected_eventHash for every input, or a client-signed proof will fail server-side verification.",
+  "algorithm": "normalizeFloats(6) -> RFC 8785 JCS -> SHA-256 -> \"sha256:<hex>\"",
+  "vectors": [
+    {
+      "id": "github-context",
+      "input": {
+        "ci": "github-actions",
+        "repo": "Trustility/platform",
+        "ref": "refs/heads/main",
+        "sha": "abc123def",
+        "workflow": "ci",
+        "event": "push",
+        "run_id": "42",
+        "run_attempt": "1",
+        "actor": "jeancristof"
+      },
+      "expected_eventHash": "sha256:df5774b8efc92b04c8ba678d8fe2435a2b48d81dbe51c65f0e8a65e04bfb5f12"
+    },
+    {
+      "id": "key-order-independent",
+      "input": {
+        "z": 1,
+        "a": 2,
+        "m": {
+          "y": 9,
+          "b": 8
+        }
+      },
+      "expected_eventHash": "sha256:ed5c336116622262b8acae34a5633dd595e52f72f48767bff30ebfd398f827fc"
+    },
+    {
+      "id": "integers-and-bools",
+      "input": {
+        "count": 3,
+        "ok": true,
+        "nope": false,
+        "none": null,
+        "big": 9007199254740991
+      },
+      "expected_eventHash": "sha256:e0e3d9c2a33fa17f1e877dc6ce14aa03256ac7d383fbb75d59fd415a5551f3b7"
+    },
+    {
+      "id": "floats-over-6dp",
+      "input": {
+        "score": 0.123456789,
+        "ratio": 1.9999995,
+        "pct": 33.3333333
+      },
+      "expected_eventHash": "sha256:992557eb435caf5751f9f0ffcbd15bdd590af311b31579664cc43ca44e8ba7a3"
+    },
+    {
+      "id": "floats-le-6dp",
+      "input": {
+        "score": 0.123456,
+        "ratio": 2.5,
+        "neg": -0.5
+      },
+      "expected_eventHash": "sha256:00a0e4c8e188f3657f2d03122100147d7daac9811c1a88909673742edf818384"
+    },
+    {
+      "id": "nested-arrays",
+      "input": {
+        "tags": [
+          "b",
+          "a",
+          "c"
+        ],
+        "nums": [
+          3,
+          1,
+          2
+        ],
+        "mixed": [
+          {
+            "b": 2,
+            "a": 1
+          },
+          {
+            "d": 4,
+            "c": 3
+          }
+        ]
+      },
+      "expected_eventHash": "sha256:a50f7b3fb7fe0858f2ac369e6477da63e0a9fafd139ebe22476819c68627c97b"
+    },
+    {
+      "id": "unicode",
+      "input": {
+        "nom_français": "éàü",
+        "emoji": "✅🔒",
+        "clé": "valeur"
+      },
+      "expected_eventHash": "sha256:3346008db534ca518d578dbf9faf9236f224ae4bad6653f8ce73f4b0f4da7b58"
+    },
+    {
+      "id": "floats-in-array",
+      "input": {
+        "series": [
+          0.1111119,
+          0.2222229,
+          3
+        ]
+      },
+      "expected_eventHash": "sha256:eea3fa0eafc392c6b9b1816225e94228450e50ebf21abbe6a4f4faa552466887"
+    },
+    {
+      "id": "negative-zero",
+      "input": {
+        "z": 0,
+        "i": -5
+      },
+      "expected_eventHash": "sha256:3a0d64b160128315c4fdc452faec3abe9529da587d88dd1c444f97dd070686ca"
+    },
+    {
+      "id": "empty-and-strings",
+      "input": {
+        "empty": {},
+        "arr": [],
+        "s": "",
+        "quote": "he said \"hi\""
+      },
+      "expected_eventHash": "sha256:492baf6c5fe9f56e80a2143aa4e42f588ae5edf077ead9c9dec0d4dd62c17e78"
+    }
+  ]
+}

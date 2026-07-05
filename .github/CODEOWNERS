@@ -1,0 +1,3 @@
+# Governance: any change under .github/ (CI, CODEOWNERS) requires review by the founder.
+# Mirrors the private platform repo's rule. Do not self-merge .github changes.
+/.github/ @jeancristof
