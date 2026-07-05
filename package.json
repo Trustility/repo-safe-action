@@ -1,0 +1,19 @@
+{
+  "name": "trustility-repo-safe-action",
+  "version": "0.1.0",
+  "description": "GitHub Action that emits a Trustility proof — a hash of abstracted CI metadata, never your source, diffs, or secrets.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "anti-formules": "bash scripts/anti-formules-check.sh README.md"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Trustility/repo-safe-action.git"
+  }
+}
