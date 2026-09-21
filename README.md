@@ -1,83 +1,135 @@
 # Trustility Repo-Safe Proof
 
-A GitHub Action that emits a Trustility proof for a step in your workflow.
+Cette action émet une preuve Trustility pour une étape GitHub Actions. Elle envoie uniquement
+un hash canonique de coordonnées CI abstraites. Elle ne lit ni ne transmet le code source, les
+différentiels, les patchs, les journaux ou les champs d’identité humaine/client. La clé API et,
+si utilisé, le JWK privé de signature sont lus localement comme entrées explicites et ne quittent
+jamais le runner.
 
-It sends only a canonical hash of a small, abstracted description of the action — the
-repository, the ref, the commit sha, the workflow name, the event. It never sends your
-source code, diffs, logs, or secrets. The action refuses to run if the metadata contains
-fields that look like raw content.
+## État de publication
 
-## What it does
+Le dépôt ne contient actuellement **aucun tag stable ni aucune release publiée**. L’exemple utilise
+donc `Trustility/repo-safe-action@main`. L’adresse par défaut de l’API est
+`https://trustility.ai`; il n’existe pas de sous-domaine `api` à configurer.
 
-1. Builds a compact metadata object from the GitHub context.
-2. Canonicalizes it with RFC 8785 (JCS) and hashes it with SHA-256.
-3. Optionally signs that hash with your Ed25519 agent key.
-4. Posts the proof to your Trustility proof rail (`POST /v1/proofs`).
+## Préparer un premier dépôt
 
-The proof rail returns a VC-JWT credential that anyone can verify statelessly against the
-published keys.
+Avant de copier le workflow :
 
-## Usage
+1. Créez un compte Trustility et une clé API. La clé est affichée uniquement au moment de son
+   émission ; conservez-la dans le secret GitHub `TRUSTILITY_API_KEY`.
+2. Créez ou revendiquez un agent et copiez son UUIDv4 canonique en minuscules dans la variable
+   GitHub `TRUSTILITY_AGENT_ID`.
+3. Créez une policy active et copiez sa référence dans le workflow. `pol:baseline@1` est la
+   policy système active ; une policy de compte est préférable lorsque vous contrôlez son cycle
+   de vie.
+
+## Exemple complet copiable
+
+Ce fichier peut être copié dans `.github/workflows/trustility-proof.yml`. Les deux valeurs
+`TRUSTILITY_API_KEY` et `TRUSTILITY_AGENT_ID` doivent être créées comme indiqué ci-dessus avant
+le premier lancement.
 
 ```yaml
-- name: Emit Trustility proof
-  uses: Trustility/repo-safe-action@v0
-  with:
-    api-url: https://api.trustility.io
-    policy-ref: pol:baseline@1
-    proof-type: Integrity
-    # optional: sign the proof with an Ed25519 agent key stored as a secret
-    agent-key: ${{ secrets.TRUSTILITY_AGENT_KEY }}
+name: Trustility proof
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit Trustility proof
+        id: trustility
+        uses: Trustility/repo-safe-action@main
+        with:
+          policy-ref: pol:baseline@1
+          api-key: ${{ secrets.TRUSTILITY_API_KEY }}
+          agent-id: ${{ vars.TRUSTILITY_AGENT_ID }}
+
+      - name: Show proof outputs
+        run: |
+          test "${{ steps.trustility.outputs.status }}" = "emitted"
+          test -n "${{ steps.trustility.outputs.proof-id }}"
+          test -n "${{ steps.trustility.outputs.event-hash }}"
 ```
 
-### Inputs
+Le workflow fournit automatiquement `api-url` avec sa valeur par défaut. Pour une autre instance
+explicitement configurée, passez `api-url`; la valeur attendue est une origine HTTPS sans slash
+final.
 
-| Input | Required | Default | Description |
+## Entrées
+
+| Entrée | Obligatoire | Défaut | Description |
 | --- | --- | --- | --- |
-| `api-url` | yes | — | Base URL of your Trustility proof rail. |
-| `policy-ref` | yes | — | Policy reference to prove against, e.g. `pol:baseline@1`. |
-| `proof-type` | no | `Integrity` | `Integrity`, `Reliability`, or `Oversight`. |
-| `agent-id` | no | `''` | Stable identifier for the emitting workflow or agent. |
-| `agent-key` | no | `''` | Ed25519 private key as a JWK JSON string (use a secret). |
-| `event-data` | no | `{}` | Extra abstracted metadata as JSON. No raw sensitive fields. |
-| `fail-on-error` | no | `true` | Fail the step when the proof is not accepted. |
+| `api-url` | non | `https://trustility.ai` | Origine du proof rail. |
+| `api-key` | oui | — | Clé API Trustility, envoyée uniquement en en-tête Bearer. |
+| `agent-id` | oui | — | UUIDv4 canonique en minuscules d’un agent revendiqué par cette clé. |
+| `policy-ref` | oui | — | Référence d’une policy active, par exemple `pol:baseline@1`. |
+| `proof-type` | non | `Integrity` | `Integrity`, `Reliability` ou `Oversight`. |
+| `agent-key` | non | vide | JWK privé Ed25519 facultatif pour signer le hash ; ce n’est pas une authentification API. |
+| `fail-on-error` | non | `true` | Échoue l’étape si l’API n’accepte pas la preuve. |
 
-### Outputs
+`event-data`, `nonce` et `ts_hint` ne sont pas des entrées. L’action les construit elle-même afin
+que les métadonnées envoyées restent fermées et que le nonce soit unique.
 
-| Output | Description |
+## Sorties
+
+| Sortie | Description |
 | --- | --- |
-| `proof-id` | The emitted proof identifier. |
-| `vc` | The VC-JWT credential. |
-| `event-hash` | The canonical hash that was proven (`sha256:...`). |
-| `status` | `emitted` or `failed`. |
+| `proof-id` | Identifiant de la preuve acceptée. |
+| `vc` | VC-JWT retourné par le proof rail. |
+| `event-hash` | Hash canonique prouvé (`sha256:...`). |
+| `status` | `emitted` ou `failed`. |
 
-## Generating an agent key
+## Ce qui est transmis
 
-The optional signing key is a standard Ed25519 key in JWK form. You can generate one with
-Node:
+Le corps de `POST /v1/proofs` contient :
 
-```js
-const { generateKeyPairSync } = require('node:crypto');
-const { privateKey } = generateKeyPairSync('ed25519');
-console.log(JSON.stringify(privateKey.export({ format: 'jwk' })));
-```
+- `ci`: la valeur fixe `github-actions` ;
+- `repo`: `GITHUB_REPOSITORY` ;
+- `ref`: `GITHUB_REF` ;
+- `sha`: `GITHUB_SHA` ;
+- `workflow`: `GITHUB_WORKFLOW` ;
+- `event`: `GITHUB_EVENT_NAME` ;
+- `run_id`: `GITHUB_RUN_ID` ;
+- `run_attempt`: `GITHUB_RUN_ATTEMPT` ;
+- `policyRef`, `type`, l’UUID `agentId`, un nonce aléatoire et un horodatage ISO générés par
+  l’action.
 
-Store the printed JSON as a repository secret (for example `TRUSTILITY_AGENT_KEY`) and pass
-it to the `agent-key` input. Keep the private key secret; only the public half is published
-with each proof.
+La clé API n’est jamais placée dans le JSON : elle est uniquement dans
+`Authorization: Bearer <clé>`, sans être journalisée.
 
-## What stays on your runner
+## Ce qui ne quitte jamais le runner
 
-Your code, file contents, diffs, environment variables, and secrets never leave the runner.
-The action sends a hash and a short list of build-context fields. If you add `event-data`,
-it is validated to reject fields such as `amount`, `recipient`, `email`, `content`,
-`message`, `subject`, and `body`.
+Le code source, le contenu des fichiers, les différentiels, les patchs, les logs, les commandes,
+les variables d’environnement non listées ci-dessus, les secrets autres que les entrées explicites
+`api-key` et `agent-key`, les tokens, mots de passe,
+identifiants de clé, en-têtes, cookies, prompts, messages, corps de requêtes et données client ne
+sont ni lus ni transmis. L’action ne prend plus de champ `event-data` arbitraire.
 
-## Requirements
+`repo`, `workflow`, `ref` et `sha` sont des coordonnées GitHub et peuvent indirectement révéler
+le nom d’une organisation ou d’un client si le dépôt en contient un. Ils sont nécessaires à la
+preuve et ne sont pas traités comme un mécanisme d’anonymisation.
 
-- A reachable Trustility proof rail (`api-url`).
-- Node is provided by the GitHub-hosted runner; the action has no npm dependencies.
+## Erreurs courantes
 
-## License
+L’action échoue avant le réseau si `api-key`, `agent-id` ou `policy-ref` manque, et explique la
+correction. Elle mappe les réponses actuelles du proof rail : clé absente/invalide,
+`AGENT_REQUIRED`, `AGENT_NOT_OWNED`, `UNKNOWN_POLICY`, `POLICY_INACTIVE`, `CLOCK_SKEW`,
+`EXPIRED_TIMESTAMP` et `NONCE_REPLAY`. Un nonce rejoué déclenche une nouvelle tentative avec un
+nonce frais. Les erreurs inconnues sont réduites à leur statut et à une consigne générique ; le
+corps brut et la clé ne sont jamais affichés.
 
-Apache License 2.0. See [LICENSE](./LICENSE).
+## Dépendances
+
+Node.js 20 ou plus récent est fourni par les runners GitHub hébergés. L’action n’a aucune
+dépendance npm à installer.
+
+## Licence
+
+Apache License 2.0. Voir [LICENSE](./LICENSE).
