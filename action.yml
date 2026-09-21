@@ -1,5 +1,5 @@
 name: 'Trustility Repo-Safe Proof'
-description: 'Emit a Trustility proof for a CI action. Sends only a canonical hash of abstracted metadata — never your source, diffs, or arbitrary secrets.'
+description: 'Emit a Trustility proof for a CI action. Sends closed abstract CI coordinates plus the proof contract; never source, diffs, patches, logs, or arbitrary event data.'
 author: 'Trustility'
 branding:
   icon: 'shield'

@@ -88,12 +88,21 @@ test('error mapper gives actionable current API remediations', () => {
   const cases = [
     [401, 'UNAUTHENTICATED', 'api-key'],
     [400, 'AGENT_REQUIRED', 'agent-id'],
+    [400, 'INVALID_AGENT_ID', 'canonical lowercase UUIDv4'],
     [403, 'AGENT_NOT_OWNED', 'Claim'],
     [404, 'UNKNOWN_POLICY', 'policy'],
+    [403, 'POLICY_NOT_OWNED', 'owned'],
     [422, 'POLICY_INACTIVE', 'active'],
     [419, 'CLOCK_SKEW', 'clock'],
     [401, 'EXPIRED_TIMESTAMP', 'immediately'],
     [409, 'NONCE_REPLAY', 'fresh'],
+    [400, 'WEAK_NONCE', 'generate the nonce'],
+    [409, 'DUPLICATE_HASH', 'event coordinates'],
+    [400, 'INVALID_SIGNATURE', 'Ed25519'],
+    [400, 'INVALID_SCHEMA', 'inputs'],
+    [400, 'RAW_DATA_REJECTED', 'sensitive'],
+    [429, 'RATE_LIMITED', 'Slow down'],
+    [500, 'INTERNAL', 'Retry'],
   ];
   for (const [status, code, expected] of cases) assert.match(formatApiError(status, { error: code }), new RegExp(expected, 'i'));
 });

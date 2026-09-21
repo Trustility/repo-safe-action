@@ -2,9 +2,9 @@
 /**
  * Trustility Repo-Safe Proof — authenticated emit step.
  *
- * Only a closed allowlist of abstract GitHub coordinates leaves the runner. Source, diffs,
- * patches, logs, secrets, credentials, tokens, and human/client identity fields are never read
- * from the environment or accepted as event data.
+ * A closed allowlist of abstract GitHub coordinates is sent as eventData. Source, diffs, patches,
+ * logs, arbitrary event data, and identity fields are never read from the environment. The API
+ * key is sent only as the Authorization header; it is never included in the request body/logs.
  */
 import { createHash, createPrivateKey, randomBytes, sign as ed25519Sign } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -139,6 +139,15 @@ function safeApiError(status, code) {
     EXPIRED_TIMESTAMP: 'Retry immediately with the action-generated timestamp; do not provide a timestamp yourself.',
     NONCE_REPLAY: 'Retry with a fresh action-generated nonce; do not cache or reuse requests.',
     INVALID_AGENT_ID: 'Set agent-id to a canonical lowercase UUIDv4, for example 123e4567-e89b-42d3-a456-426614174000.',
+    POLICY_NOT_OWNED: 'Use a policy owned by the account that issued this API key, or create a policy under that account.',
+    WEAK_NONCE: 'Let the action generate the nonce; do not override, cache, or reuse a nonce.',
+    DUPLICATE_HASH: 'The same event coordinates were already accepted; run the step once for this commit or change the event coordinates.',
+    INVALID_SIGNATURE: 'Remove an invalid agent-key or provide the matching Ed25519 JWK; agent-key is optional signing, not authentication.',
+    INVALID_SCHEMA: 'Use the action inputs as documented and do not add event-data; retry with a valid policy, agent, and proof type.',
+    RAW_DATA_REJECTED: 'Remove raw or sensitive fields; this action accepts only its closed GitHub coordinate allowlist.',
+    RATE_LIMITED: 'Slow down proof emissions for this account and retry after the API rate-limit window.',
+    INTERNAL: 'Retry once; if it persists, record the HTTP status and code without sharing the API key.',
+    INTERNAL_ERROR: 'Retry once; if it persists, record the HTTP status and code without sharing the API key.',
   };
   const action = fixes[code] ?? 'Check the policy reference and API configuration, then retry. Do not share the API key.';
   return `Trustility rejected the proof (HTTP ${status}, ${code || 'UNKNOWN_ERROR'}). ${action}`;
@@ -162,6 +171,15 @@ function inputConfig(env) {
   const proofType = (env.INPUT_PROOF_TYPE || 'Integrity').trim();
   const agentId = (env.INPUT_AGENT_ID || '').trim();
   if (!apiKey) throw validationError('Trustility api-key is required. Add the TRUSTILITY_API_KEY secret to the workflow and pass it to api-key.');
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(apiUrl);
+  } catch {
+    throw validationError('Trustility api-url must be a valid HTTPS origin.');
+  }
+  if (parsedUrl.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(parsedUrl.hostname)) {
+    throw validationError('Trustility api-url must use HTTPS. Plain HTTP is accepted only for a local test server.');
+  }
   if (!policyRef) throw validationError('Trustility policy-ref is required. Create or select an active policy before running the action.');
   if (!agentId) throw validationError('Trustility agent-id is required. Claim an agent and pass its canonical lowercase UUIDv4.');
   if (!isCanonicalAgentId(agentId)) throw validationError('Trustility agent-id must be a canonical lowercase UUIDv4, for example 123e4567-e89b-42d3-a456-426614174000.');
