@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "anti-formules": "bash scripts/anti-formules-check.sh README.md"
+    "anti-formules": "bash scripts/anti-formules-check.sh README.md",
+    "e2e:platform": "node --test --experimental-strip-types test/platform-e2e.test.mjs"
   },
   "repository": {
     "type": "git",

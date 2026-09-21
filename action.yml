@@ -1,5 +1,5 @@
 name: 'Trustility Repo-Safe Proof'
-description: 'Emit a Trustility proof for a CI action. Sends only a canonical hash of abstracted metadata — never your source, diffs, or secrets.'
+description: 'Emit a Trustility proof for a CI action. Sends only a canonical hash of abstracted metadata — never your source, diffs, or arbitrary secrets.'
 author: 'Trustility'
 branding:
   icon: 'shield'
@@ -7,27 +7,26 @@ branding:
 
 inputs:
   api-url:
-    description: 'Base URL of the Trustility proof rail (for example https://api.trustility.io).'
-    required: true
+    description: 'Base URL of the Trustility proof rail.'
+    required: false
+    default: 'https://trustility.ai'
   policy-ref:
     description: 'Policy reference the action is proving against (for example pol:baseline@1).'
+    required: true
+  api-key:
+    description: 'Trustility API key. Store it as a repository or organization secret.'
     required: true
   proof-type:
     description: 'Proof type: Integrity, Reliability, or Oversight.'
     required: false
     default: 'Integrity'
   agent-id:
-    description: 'Optional stable identifier for the emitting workflow or agent.'
-    required: false
-    default: ''
+    description: 'Canonical lowercase UUIDv4 of the claimed Trustility agent.'
+    required: true
   agent-key:
     description: 'Optional Ed25519 private key as a JWK JSON string (store it as a repository secret). When set, the proof is signed and the matching public key is attached so anyone can verify it.'
     required: false
     default: ''
-  event-data:
-    description: 'Optional JSON object of extra abstracted metadata to include. Must not contain raw sensitive fields (amount, recipient, email, content, message, subject, body).'
-    required: false
-    default: '{}'
   fail-on-error:
     description: 'Fail the step when the proof is not accepted (default true).'
     required: false
@@ -56,8 +55,8 @@ runs:
       env:
         INPUT_API_URL: ${{ inputs.api-url }}
         INPUT_POLICY_REF: ${{ inputs.policy-ref }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
         INPUT_PROOF_TYPE: ${{ inputs.proof-type }}
         INPUT_AGENT_ID: ${{ inputs.agent-id }}
         INPUT_AGENT_KEY: ${{ inputs.agent-key }}
-        INPUT_EVENT_DATA: ${{ inputs.event-data }}
         INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
