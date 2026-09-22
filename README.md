@@ -1,10 +1,11 @@
 # Trustility Repo-Safe Proof
 
-Cette action émet une preuve Trustility pour une étape GitHub Actions. Elle envoie uniquement
-un hash canonique de coordonnées CI abstraites. Elle ne lit ni ne transmet le code source, les
-différentiels, les patchs, les journaux ou les champs d’identité humaine/client. La clé API et,
-si utilisé, le JWK privé de signature sont lus localement comme entrées explicites et ne quittent
-jamais le runner.
+Cette action émet une preuve Trustility pour une étape GitHub Actions. Elle envoie des coordonnées
+CI fermées et les champs nécessaires au contrat d’émission. Elle ne lit ni ne transmet le code
+source, les différentiels, les patchs, les journaux ou des données arbitraires. La clé API et, si
+utilisé, le JWK privé de signature sont lus localement comme entrées explicites ; la clé API est
+envoyée uniquement dans l’en-tête d’autorisation et n’est jamais incluse dans le corps, les logs
+ou les sorties.
 
 ## État de publication
 
@@ -88,8 +89,13 @@ que les métadonnées envoyées restent fermées et que le nonce soit unique.
 
 ## Ce qui est transmis
 
-Le corps de `POST /v1/proofs` contient :
+La requête HTTPS vers `POST /v1/proofs` contient toujours :
 
+- l’en-tête `Authorization: Bearer <api-key>` ;
+- `agentId` ;
+- `policyRef` ;
+- `type` (le type de preuve) ;
+- `nonce` aléatoire et `ts_hint` ISO générés immédiatement avant l’envoi ;
 - `ci`: la valeur fixe `github-actions` ;
 - `repo`: `GITHUB_REPOSITORY` ;
 - `ref`: `GITHUB_REF` ;
@@ -98,19 +104,19 @@ Le corps de `POST /v1/proofs` contient :
 - `event`: `GITHUB_EVENT_NAME` ;
 - `run_id`: `GITHUB_RUN_ID` ;
 - `run_attempt`: `GITHUB_RUN_ATTEMPT` ;
-- `policyRef`, `type`, l’UUID `agentId`, un nonce aléatoire et un horodatage ISO générés par
-  l’action.
 
-La clé API n’est jamais placée dans le JSON : elle est uniquement dans
-`Authorization: Bearer <clé>`, sans être journalisée.
+Si `agent-key` est fourni, la requête contient aussi conditionnellement `agentPublicKey` et
+`signature`. `eventHash` est calculé localement pour la signature éventuelle ; ce n’est pas un
+champ envoyé dans la requête. La plateforme le recalcule à partir de `eventData` et le renvoie
+dans la réponse.
 
 ## Ce qui ne quitte jamais le runner
 
 Le code source, le contenu des fichiers, les différentiels, les patchs, les logs, les commandes,
-les variables d’environnement non listées ci-dessus, les secrets autres que les entrées explicites
-`api-key` et `agent-key`, les tokens, mots de passe,
-identifiants de clé, en-têtes, cookies, prompts, messages, corps de requêtes et données client ne
-sont ni lus ni transmis. L’action ne prend plus de champ `event-data` arbitraire.
+les variables d’environnement non listées ci-dessus, l’identité de l’acteur, les secrets autres
+que la clé API utilisée dans l’en-tête, les tokens, mots de passe, identifiants de clé, en-têtes,
+cookies, prompts, messages, corps de requêtes, champs client et données arbitraires ne sont ni lus
+ni transmis. L’action ne prend plus de champ `event-data` arbitraire.
 
 `repo`, `workflow`, `ref` et `sha` sont des coordonnées GitHub et peuvent indirectement révéler
 le nom d’une organisation ou d’un client si le dépôt en contient un. Ils sont nécessaires à la
@@ -119,11 +125,23 @@ preuve et ne sont pas traités comme un mécanisme d’anonymisation.
 ## Erreurs courantes
 
 L’action échoue avant le réseau si `api-key`, `agent-id` ou `policy-ref` manque, et explique la
-correction. Elle mappe les réponses actuelles du proof rail : clé absente/invalide,
-`AGENT_REQUIRED`, `AGENT_NOT_OWNED`, `UNKNOWN_POLICY`, `POLICY_INACTIVE`, `CLOCK_SKEW`,
-`EXPIRED_TIMESTAMP` et `NONCE_REPLAY`. Un nonce rejoué déclenche une nouvelle tentative avec un
-nonce frais. Les erreurs inconnues sont réduites à leur statut et à une consigne générique ; le
-corps brut et la clé ne sont jamais affichés.
+correction. Elle mappe avec le statut HTTP et le code les réponses actuelles du proof rail :
+`UNAUTHENTICATED`, `AGENT_REQUIRED`, `INVALID_AGENT_ID`, `AGENT_NOT_OWNED`,
+`POLICY_NOT_OWNED`, `UNKNOWN_POLICY`, `POLICY_INACTIVE`, `CLOCK_SKEW`,
+`EXPIRED_TIMESTAMP`, `NONCE_REPLAY`, `WEAK_NONCE`, `DUPLICATE_HASH`, `INVALID_SIGNATURE`,
+`INVALID_SCHEMA`, `RAW_DATA_REJECTED`, `RATE_LIMITED` et `INTERNAL`. Chaque message indique
+une correction concrète. Un nonce rejoué déclenche une nouvelle tentative avec un nonce frais.
+Les erreurs inconnues sont réduites à leur statut et à une consigne générique ; le corps brut et
+la clé ne sont jamais affichés.
+
+## Test d’intégration local
+
+Le test E2E utilise le checkout local de la plateforme via
+`TRUSTILITY_PLATFORM_DIR=/chemin/vers/platform npm run e2e:platform`. Il provisionne des stores en
+mémoire et démarre `createApp` localement ; il ne contacte jamais `https://trustility.ai`. Le
+checkout de la plateforme est privé et n’est donc pas récupéré par la CI publique : sans
+`TRUSTILITY_PLATFORM_DIR`, le test est explicitement ignoré. Aucun secret inter-dépôts n’est
+ajouté au workflow.
 
 ## Dépendances
 
